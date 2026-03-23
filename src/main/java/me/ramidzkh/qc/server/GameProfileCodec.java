@@ -61,7 +61,7 @@ public class GameProfileCodec {
             var value = readUTF8String(property);
             var signature = property.hasRemaining() ? readUTF8String(property) : null;
 
-            profile.getProperties().put(name, new Property(name, value, signature));
+            profile.properties().put(name, new Property(name, value, signature));
         }
 
         return profile;
@@ -121,25 +121,25 @@ public class GameProfileCodec {
 
     public static byte[] write(GameProfile profile) {
         var uuidBuffer = allocate(0x04, 0x10);
-        uuidBuffer.putLong(profile.getId().getMostSignificantBits());
-        uuidBuffer.putLong(profile.getId().getLeastSignificantBits());
+        uuidBuffer.putLong(profile.id().getMostSignificantBits());
+        uuidBuffer.putLong(profile.id().getLeastSignificantBits());
 
-        var nameBytes = writeUTF8String(profile.getName());
+        var nameBytes = writeUTF8String(profile.name());
 
         var propertiesList = new ArrayList<byte[]>();
         var propertiesTotalLength = 0;
 
-        for (var entry : profile.getProperties().entries()) {
+        for (var entry : profile.properties().entries()) {
             var prop = entry.getValue();
-            var propNameBytes = writeUTF8String(prop.getName());
-            var valueBytes = writeUTF8String(prop.getValue());
+            var propNameBytes = writeUTF8String(prop.name());
+            var valueBytes = writeUTF8String(prop.value());
 
             var propertyLength = propNameBytes.length + valueBytes.length;
 
             byte[] signatureBytes = null;
 
-            if (prop.getSignature() != null) {
-                signatureBytes = writeUTF8String(prop.getSignature());
+            if (prop.signature() != null) {
+                signatureBytes = writeUTF8String(prop.signature());
                 propertyLength += signatureBytes.length;
             }
 

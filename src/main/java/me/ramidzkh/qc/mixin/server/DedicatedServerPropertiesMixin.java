@@ -26,12 +26,12 @@ public abstract class DedicatedServerPropertiesMixin extends Settings<DedicatedS
     }
 
     @Override
-    public int getQuicPort() {
+    public int quic_connect$getQuicPort() {
         return quicPort;
     }
 
     @Override
-    public boolean isForceClientAuthentication() {
+    public boolean quic_connect$isForceClientAuthentication() {
         return quicForceClientAuthentication;
     }
 

@@ -6,6 +6,8 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.Permission;
+import net.minecraft.server.permissions.PermissionLevel;
 
 import java.util.HexFormat;
 
@@ -18,7 +20,7 @@ public class DumpProfileCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(literal("quic-connect")
-                .requires(source -> source.hasPermission(1))
+                .requires(source -> source.permissions().hasPermission(new Permission.HasCommandLevel(PermissionLevel.ALL)))
                 .then(literal("dump-profile")
                         .then(argument("players", EntityArgument.players())
                                 .executes(context -> {
@@ -34,6 +36,6 @@ public class DumpProfileCommand {
         var config = GameProfileCodec.OID + " = DER:"
                 + FORMAT.formatHex(GameProfileCodec.write(player.getGameProfile()));
         return Component.literal(player.getStringUUID() + ": ").append(player.getDisplayName())
-                .withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, config)));
+                .withStyle(style -> style.withClickEvent(new ClickEvent.CopyToClipboard(config)));
     }
 }

@@ -2,9 +2,6 @@ package me.ramidzkh.qc.client;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
-import io.netty.channel.epoll.Epoll;
-import io.netty.channel.epoll.EpollDatagramChannel;
-import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.incubator.codec.quic.QuicChannel;
 import io.netty.incubator.codec.quic.QuicClientCodecBuilder;
@@ -12,9 +9,11 @@ import io.netty.incubator.codec.quic.QuicSslContextBuilder;
 import io.netty.incubator.codec.quic.QuicStreamType;
 import me.ramidzkh.qc.QuicConnect;
 import me.ramidzkh.qc.mixin.ConnectionAccessor;
+import me.ramidzkh.qc.util.EventLoopGroupHolderUtil;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.server.network.EventLoopGroupHolder;
 import org.jetbrains.annotations.NotNull;
 
 import java.net.InetSocketAddress;
@@ -24,10 +23,8 @@ import java.util.concurrent.TimeUnit;
 
 public class QuicConnection {
 
-    public static ChannelFuture connect(InetSocketAddress address, boolean useNativeTransport, Connection connection)
+    public static ChannelFuture connect(InetSocketAddress address, EventLoopGroupHolder groupHolder, Connection connection)
             throws ExecutionException, InterruptedException {
-        useNativeTransport &= QuicConnect.ENABLE_NATIVE_TRANSPORT && Epoll.isAvailable();
-
         var config = FabricLoader.getInstance().getConfigDir().resolve("quic-connect");
         var clientCertificate = config.resolve("client_certificate.pem");
         var clientKey = config.resolve("client_key.pem");
@@ -49,9 +46,8 @@ public class QuicConnection {
                 .build();
 
         var channel = new Bootstrap()
-                .group(useNativeTransport ? Connection.NETWORK_EPOLL_WORKER_GROUP.get()
-                        : Connection.NETWORK_WORKER_GROUP.get())
-                .channel(useNativeTransport ? EpollDatagramChannel.class : NioDatagramChannel.class)
+                .group(groupHolder.eventLoopGroup())
+                .channel(EventLoopGroupHolderUtil.datagramChannel(true))
                 .handler(codec)
                 .bind(0)
                 .sync()
@@ -67,7 +63,7 @@ public class QuicConnection {
                     protected void initChannel(@NotNull Channel channel) {
                         ((ConnectionAccessor) connection).setEncrypted(true);
                         var pipeline = channel.pipeline();
-                        Connection.configureSerialization(pipeline, PacketFlow.CLIENTBOUND);
+                        Connection.configureSerialization(pipeline, PacketFlow.CLIENTBOUND, false, null);
                         pipeline.addLast("packet_handler", connection);
                     }
                 })

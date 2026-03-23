@@ -2,7 +2,7 @@ package me.ramidzkh.qc.server;
 
 public interface ExtraServerProperties {
 
-    int getQuicPort();
+    int quic_connect$getQuicPort();
 
-    boolean isForceClientAuthentication();
+    boolean quic_connect$isForceClientAuthentication();
 }

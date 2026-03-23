@@ -3,9 +3,6 @@ package me.ramidzkh.qc.server;
 import com.mojang.logging.LogUtils;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
-import io.netty.channel.epoll.Epoll;
-import io.netty.channel.epoll.EpollDatagramChannel;
-import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.incubator.codec.quic.QuicConnectionEvent;
 import io.netty.incubator.codec.quic.QuicServerCodecBuilder;
@@ -13,15 +10,18 @@ import io.netty.incubator.codec.quic.QuicSslContextBuilder;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import me.ramidzkh.qc.QuicConnect;
 import me.ramidzkh.qc.mixin.ConnectionAccessor;
+import me.ramidzkh.qc.util.EventLoopGroupHolderUtil;
 import me.ramidzkh.qc.token.KeyedConnectionIdGenerator;
 import me.ramidzkh.qc.token.KeyedTokenHandler;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.Util;
 import net.minecraft.network.Connection;
 import net.minecraft.network.RateKickingConnection;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.handshake.HandshakeProtocols;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.EventLoopGroupHolder;
 import net.minecraft.server.network.ServerHandshakePacketListenerImpl;
+import net.minecraft.util.Util;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -41,8 +41,6 @@ public class QuicServerConnectionListener {
 
     public static void startQuicServerListener(MinecraftServer server, List<ChannelFuture> channels,
             List<Connection> connections, @Nullable InetAddress address, ExtraServerProperties properties) {
-        var useNativeTransport = QuicConnect.ENABLE_NATIVE_TRANSPORT && Epoll.isAvailable() && server.isEpollEnabled();
-
         var config = FabricLoader.getInstance().getConfigDir().resolve("quic-connect");
         var keyFile = config.resolve("key.pem");
         var certificateFile = config.resolve("certificate.pem");
@@ -55,7 +53,7 @@ public class QuicServerConnectionListener {
             context.trustManager(caCertificateFile.toFile());
         }
 
-        context.clientAuth(properties.isForceClientAuthentication() ? ClientAuth.REQUIRE : ClientAuth.OPTIONAL);
+        context.clientAuth(properties.quic_connect$isForceClientAuthentication() ? ClientAuth.REQUIRE : ClientAuth.OPTIONAL);
 
         var inheritAddresses = new WeakHashMap<Channel, SocketAddress>();
 
@@ -109,14 +107,14 @@ public class QuicServerConnectionListener {
                     @Override
                     protected void initChannel(@NotNull Channel channel) {
                         var pipeline = channel.pipeline();
-                        Connection.configureSerialization(pipeline, PacketFlow.SERVERBOUND);
+                        Connection.configureSerialization(pipeline, PacketFlow.SERVERBOUND, false, null);
                         var pps = server.getRateLimitPacketsPerSecond();
                         var connection = pps > 0 ? new RateKickingConnection(pps)
                                 : new Connection(PacketFlow.SERVERBOUND);
                         ((ConnectionAccessor) connection).setEncrypted(true);
                         connections.add(connection);
                         pipeline.addLast("packet_handler", connection);
-                        connection.setListener(new ServerHandshakePacketListenerImpl(server, connection));
+                        connection.setListenerForServerboundHandshake(new ServerHandshakePacketListenerImpl(server, connection));
 
                         var address = inheritAddresses.get(channel.parent());
 
@@ -127,12 +125,12 @@ public class QuicServerConnectionListener {
                 })
                 .build();
 
+        EventLoopGroupHolder remote = EventLoopGroupHolder.remote(true);
         channels.add(new Bootstrap()
-                .group(useNativeTransport ? Connection.NETWORK_EPOLL_WORKER_GROUP.get()
-                        : Connection.NETWORK_WORKER_GROUP.get())
-                .channel(useNativeTransport ? EpollDatagramChannel.class : NioDatagramChannel.class)
+                .group(remote.eventLoopGroup())
+                .channel(EventLoopGroupHolderUtil.datagramChannel(true))
                 .handler(codec)
-                .bind(new InetSocketAddress(address, properties.getQuicPort()))
+                .bind(new InetSocketAddress(address, properties.quic_connect$getQuicPort()))
                 .syncUninterruptibly());
     }
 }

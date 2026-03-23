@@ -8,6 +8,8 @@ import me.ramidzkh.qc.client.QuicConnection;
 import me.ramidzkh.qc.client.QuicSocketAddress;
 import me.ramidzkh.qc.client.ServerAddressProperties;
 import net.minecraft.network.Connection;
+import net.minecraft.server.network.EventLoopGroupHolder;
+import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -33,24 +35,24 @@ public class ConnectionMixin {
     private boolean encrypted;
 
     @Inject(method = "connect", at = @At("HEAD"), cancellable = true)
-    private static void onConnect(InetSocketAddress address, boolean useNativeTransport, Connection connection,
-            CallbackInfoReturnable<ChannelFuture> callbackInfoReturnable)
+    private static void onConnect(InetSocketAddress address, EventLoopGroupHolder groupHolder, Connection connection,
+                                  CallbackInfoReturnable<ChannelFuture> callbackInfoReturnable)
             throws ExecutionException, InterruptedException {
         if (address instanceof QuicSocketAddress quicAddress) {
-            if (((ServerAddressProperties) (Object) quicAddress.getOrigin()).getUseQuic()) {
-                callbackInfoReturnable.setReturnValue(QuicConnection.connect(address, useNativeTransport, connection));
+            if (((ServerAddressProperties) (Object) quicAddress.getOrigin()).quic_connect$getUseQuic()) {
+                callbackInfoReturnable.setReturnValue(QuicConnection.connect(address, groupHolder, connection));
             }
         }
     }
 
-    @Redirect(method = "channelActive", at = @At(value = "FIELD", target = "Lnet/minecraft/network/Connection;address:Ljava/net/SocketAddress;"))
+    @Redirect(method = "channelActive", at = @At(value = "FIELD", target = "Lnet/minecraft/network/Connection;address:Ljava/net/SocketAddress;", opcode = Opcodes.PUTFIELD))
     private void dropQuicAddresses(Connection instance, SocketAddress value) {
         if (!(value instanceof QuicStreamAddress)) {
             address = value;
         }
     }
 
-    @Redirect(method = "disconnect", at = @At(value = "FIELD", target = "Lnet/minecraft/network/Connection;channel:Lio/netty/channel/Channel;"))
+    @Redirect(method = "disconnect(Lnet/minecraft/network/DisconnectionDetails;)V", at = @At(value = "FIELD", target = "Lnet/minecraft/network/Connection;channel:Lio/netty/channel/Channel;", opcode = Opcodes.GETFIELD))
     private Channel getChannelForDisconnect(Connection self) {
         if (channel instanceof QuicStreamChannel quic) {
             return quic.parent();

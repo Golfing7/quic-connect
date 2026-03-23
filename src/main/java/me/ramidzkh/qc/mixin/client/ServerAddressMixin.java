@@ -34,8 +34,8 @@ public class ServerAddressMixin implements ServerAddressProperties {
 
         if (newAddress != INVALID) {
             switch (scheme) {
-                case "minecraft" -> ((ServerAddressProperties) (Object) newAddress).setUseQuic(false);
-                case "quic" -> ((ServerAddressProperties) (Object) newAddress).setUseQuic(true);
+                case "minecraft" -> ((ServerAddressProperties) (Object) newAddress).quic_connect$setUseQuic(false);
+                case "quic" -> ((ServerAddressProperties) (Object) newAddress).quic_connect$setUseQuic(true);
                 default -> {
                     // TODO: API?
                 }
@@ -57,12 +57,12 @@ public class ServerAddressMixin implements ServerAddressProperties {
     }
 
     @Override
-    public boolean getUseQuic() {
+    public boolean quic_connect$getUseQuic() {
         return quic;
     }
 
     @Override
-    public void setUseQuic(boolean quic) {
+    public void quic_connect$setUseQuic(boolean quic) {
         this.quic = quic;
     }
 }

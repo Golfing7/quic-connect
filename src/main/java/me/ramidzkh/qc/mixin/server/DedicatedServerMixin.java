@@ -8,7 +8,7 @@ import net.minecraft.server.Services;
 import net.minecraft.server.WorldStem;
 import net.minecraft.server.dedicated.DedicatedServer;
 import net.minecraft.server.dedicated.DedicatedServerProperties;
-import net.minecraft.server.level.progress.ChunkProgressListenerFactory;
+import net.minecraft.server.level.progress.LevelLoadListener;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import org.slf4j.Logger;
@@ -35,18 +35,18 @@ public abstract class DedicatedServerMixin extends MinecraftServer {
 
     public DedicatedServerMixin(Thread thread, LevelStorageSource.LevelStorageAccess levelStorageAccess,
             PackRepository packRepository, WorldStem worldStem, Proxy proxy, DataFixer dataFixer, Services services,
-            ChunkProgressListenerFactory chunkProgressListenerFactory) {
+            LevelLoadListener loadListener) {
         super(thread, levelStorageAccess, packRepository, worldStem, proxy, dataFixer, services,
-                chunkProgressListenerFactory);
+                loadListener);
     }
 
     @Inject(method = "initServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerConnectionListener;startTcpServerListener(Ljava/net/InetAddress;I)V", shift = At.Shift.AFTER))
     private void openQuic(CallbackInfoReturnable<Boolean> callbackInfoReturnable) throws IOException {
         var properties = (ExtraServerProperties) getProperties();
 
-        if (properties.getQuicPort() != -1) {
+        if (properties.quic_connect$getQuicPort() != -1) {
             LOGGER.info("Starting Quic bind on {}:{}", getLocalIp().isEmpty() ? "*" : getLocalIp(),
-                    properties.getQuicPort());
+                    properties.quic_connect$getQuicPort());
             InetAddress address = null;
 
             if (!getLocalIp().isEmpty()) {

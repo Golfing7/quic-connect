@@ -33,7 +33,7 @@ public class ServerLoginPacketListenerImplMixin {
 
     @Shadow
     @Nullable
-    GameProfile gameProfile;
+    private GameProfile authenticatedProfile;
 
     @Redirect(method = "handleHello", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;usesAuthentication()Z"))
     private boolean usesAuthentication(MinecraftServer server, ServerboundHelloPacket packet) {
@@ -46,9 +46,9 @@ public class ServerLoginPacketListenerImplMixin {
                     var profile = GameProfileCodec.read(ByteBuffer.wrap(extension));
 
                     if (QuicConnect.ALLOW_UNMATCHED_PROFILE ||
-                            (profile.getId().equals(packet.profileId().orElse(null))
-                                    && profile.getName().equals(packet.name()))) {
-                        this.gameProfile = profile;
+                            (profile.id().equals(packet.profileId())
+                                    && profile.name().equals(packet.name()))) {
+                        this.authenticatedProfile = profile;
                         return false;
                     }
                 }

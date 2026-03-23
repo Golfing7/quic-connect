@@ -2,11 +2,11 @@ package me.ramidzkh.qc.client;
 
 public interface ServerAddressProperties {
 
-    boolean getUseQuic();
+    boolean quic_connect$getUseQuic();
 
-    void setUseQuic(boolean quic);
+    void quic_connect$setUseQuic(boolean quic);
 
     default void copy(ServerAddressProperties other) {
-        setUseQuic(other.getUseQuic());
+        quic_connect$setUseQuic(other.quic_connect$getUseQuic());
     }
 }
