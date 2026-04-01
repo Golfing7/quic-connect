@@ -1,3 +1,5 @@
+import org.gradle.internal.os.OperatingSystem
+
 plugins {
     id("fabric-loom") version "1.15.5"
     id("com.matthewprenger.cursegradle") version "1.4.0"
@@ -19,7 +21,29 @@ dependencies {
         include("io.netty.incubator:netty-incubator-codec-native-quic:0.0.50.Final:${classifier}")
     }
 
-    runtimeOnly("io.netty.incubator:netty-incubator-codec-native-quic:0.0.50.Final:linux-x86_64")
+    def currentOs = OperatingSystem.current()
+    def arch = System.getProperty("os.arch")
+    def nettyArch
+    if (arch.contains("x86_64") || arch.contains("amd64")) {
+        nettyArch = "x86_64"
+    } else if (arch.contains("arm64") || arch.contains("aarch64")) {
+        nettyArch = "aarch_64"
+    } else {
+        throw new UnsupportedOperationException("CPU not supported")
+    }
+
+    def platform
+    if (currentOs.isWindows()) {
+        platform = "windows"
+    } else if (currentOs.isLinux()) {
+        platform = "linux"
+    } else if (currentOs.isMacOsX()) {
+        platform = "osx"
+    } else {
+        throw new UnsupportedOperationException("Platform not supported")
+    }
+
+    runtimeOnly("io.netty.incubator:netty-incubator-codec-native-quic:0.0.50.Final:$platform-$nettyArch")
     runtimeOnly("io.netty:netty-all:4.2.10.Final")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
