@@ -204,9 +204,5 @@ public abstract class ConnectionMixin implements ConnectionSpoofer {
             this.channel.parent().pipeline().replace("outbound_config", "encoder", encoder);
             this.channel.parent().pipeline().addLast("packet_handler", new DatagramConnectionWrapper((Connection) (Object) this));
         }
-
-        LOGGER.info("{} INTO PROTOCOL {}", this.getReceiving(), protocolInfo.id());
-        LOGGER.info("REWRITING OUTBOUND MAIN {}", this.channel.pipeline().names().toString());
-        LOGGER.info("REWRITING OUTBOUND PARENT {}", this.channel.parent().pipeline().names().toString());
     }
 }

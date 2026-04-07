@@ -71,9 +71,6 @@ public class QuicConnection {
                         Connection.configureSerialization(pipeline, PacketFlow.CLIENTBOUND, false, null);
                         Connection.configureSerialization(parentPipeline, PacketFlow.CLIENTBOUND, false, null);
 
-                        LOGGER.info("CLIENT MAIN {}", channel.pipeline().names());
-                        LOGGER.info("CLIENT PARENT {}", channel.parent().pipeline().names());
-
                         pipeline.addLast("packet_handler", connection);
                     }
                 })

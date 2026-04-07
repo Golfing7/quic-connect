@@ -132,9 +132,6 @@ public class QuicServerConnectionListener {
                         if (address != null) {
                             ((ConnectionAccessor) connection).setAddress(address);
                         }
-
-                        LOGGER.info("SERVER MAIN {}", channel.pipeline().names());
-                        LOGGER.info("SERVER PARENT {}", channel.parent().pipeline().names());
                     }
                 })
                 .build();
