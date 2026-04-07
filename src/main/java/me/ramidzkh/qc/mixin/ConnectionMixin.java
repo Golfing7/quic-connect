@@ -11,7 +11,7 @@ import me.ramidzkh.qc.shared.DatagramConnectionWrapper;
 import net.minecraft.network.*;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
-import net.minecraft.network.protocol.game.ServerboundInteractPacket;
+import net.minecraft.network.protocol.game.*;
 import net.minecraft.server.network.EventLoopGroupHolder;
 import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -27,11 +28,47 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 @ChannelHandler.Sharable
 @Mixin(Connection.class)
 public abstract class ConnectionMixin implements ConnectionSpoofer {
+    // TODO Make these maps and have certain packets be conditionally datagrams. I.e. packets that concern *other* entities may not be important.
+    // Packets that can be conditionally datagrams:
+    /*
+    ClientboundMoveEntityPacket (If the entity being moved is not you!)
+    ClientboundMoveMinecartPacket
+     */
+    @Unique
+    private static final Set<Class<? extends Packet<?>>> CLIENTBOUND_DATAGRAM_PACKETS = Set.of(
+            // Hurt animations are not important.
+            ClientboundHurtAnimationPacket.class,
+            // Particles are not important.
+            ClientboundLevelParticlesPacket.class,
+
+            // As of 1.21.11, these packets serve no purpose!
+            ClientboundPlayerCombatEndPacket.class,
+            ClientboundPlayerCombatEnterPacket.class,
+
+            // Sound packets are very unnecessary
+            ClientboundSoundEntityPacket.class,
+            ClientboundSoundPacket.class,
+            ClientboundStopSoundPacket.class
+    );
+    @Unique
+    private static final Set<Class<? extends Packet<?>>> SERVERBOUND_DATAGRAM_PACKETS = Set.of(
+            // This is a very good example of a packet that could be placed into a datagram channel.
+            // Every client will send this packet to the server when they are done ticking.
+            ServerboundClientTickEndPacket.class,
+            // Players can control a boat to move it left or right. These packets are fine to miss!
+            ServerboundPaddleBoatPacket.class,
+            // Player input does not need to be reliable.
+            ServerboundPlayerInputPacket.class,
+            // A player swinging their arm (uselessly) does not need to be reliable.
+            ServerboundSwingPacket.class
+
+    );
 
     @Shadow
     private Channel channel;
@@ -54,6 +91,9 @@ public abstract class ConnectionMixin implements ConnectionSpoofer {
 
     @Shadow
     protected abstract void channelRead0(ChannelHandlerContext par1, Object par2) throws Exception;
+
+    @Shadow
+    public abstract PacketFlow getSending();
 
     @Override
     public void quic_connect$sendDatagramPacket(Packet<?> packet) {
@@ -99,10 +139,16 @@ public abstract class ConnectionMixin implements ConnectionSpoofer {
         }
     }
 
-    @Inject(method = "sendPacket", at = @At("HEAD"))
+    @Inject(method = "sendPacket", at = @At("HEAD"), cancellable = true)
     private void onSendPacket(Packet<?> packet, @Nullable ChannelFutureListener channelFutureListener, boolean bl, CallbackInfo ci) {
-        if (packet instanceof ServerboundInteractPacket pck) {
-            this.channel.parent().writeAndFlush(pck, this.channel.parent().voidPromise());
+        if (this.getSending() == PacketFlow.CLIENTBOUND) {
+            if (CLIENTBOUND_DATAGRAM_PACKETS.contains(packet.getClass())) {
+                quic_connect$sendDatagramPacket(packet);
+                ci.cancel();
+            }
+        } else if (SERVERBOUND_DATAGRAM_PACKETS.contains(packet.getClass())) {
+            quic_connect$sendDatagramPacket(packet);
+            ci.cancel();
         }
     }
 
