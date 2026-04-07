@@ -2,6 +2,7 @@ package me.ramidzkh.qc.server;
 
 import com.mojang.logging.LogUtils;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.incubator.codec.quic.QuicConnectionEvent;
@@ -15,8 +16,11 @@ import me.ramidzkh.qc.token.KeyedConnectionIdGenerator;
 import me.ramidzkh.qc.token.KeyedTokenHandler;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.network.Connection;
+import net.minecraft.network.PacketDecoder;
 import net.minecraft.network.RateKickingConnection;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.GameProtocols;
 import net.minecraft.network.protocol.handshake.HandshakeProtocols;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.EventLoopGroupHolder;
@@ -29,6 +33,7 @@ import org.slf4j.Logger;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.SecureRandom;
 import java.util.List;
@@ -66,6 +71,7 @@ public class QuicServerConnectionListener {
                 .initialMaxStreamDataBidirectionalRemote(1000000)
                 .initialMaxStreamsBidirectional(100)
                 .initialMaxStreamsUnidirectional(100)
+                .datagram(256, 256)
                 .tokenHandler(new KeyedTokenHandler(Util.make(new byte[32], new SecureRandom()::nextBytes)))
                 .connectionIdAddressGenerator(
                         new KeyedConnectionIdGenerator(Util.make(new byte[32], new SecureRandom()::nextBytes)))
@@ -107,7 +113,12 @@ public class QuicServerConnectionListener {
                     @Override
                     protected void initChannel(@NotNull Channel channel) {
                         var pipeline = channel.pipeline();
+                        var parentPipeline = channel.parent().pipeline();
+
+                        // Configure the parent's pipeline to also use datagrams.
+                        Connection.configureSerialization(parentPipeline, PacketFlow.SERVERBOUND, false, null);
                         Connection.configureSerialization(pipeline, PacketFlow.SERVERBOUND, false, null);
+
                         var pps = server.getRateLimitPacketsPerSecond();
                         var connection = pps > 0 ? new RateKickingConnection(pps)
                                 : new Connection(PacketFlow.SERVERBOUND);
@@ -121,6 +132,9 @@ public class QuicServerConnectionListener {
                         if (address != null) {
                             ((ConnectionAccessor) connection).setAddress(address);
                         }
+
+                        LOGGER.info("SERVER MAIN {}", channel.pipeline().names());
+                        LOGGER.info("SERVER PARENT {}", channel.parent().pipeline().names());
                     }
                 })
                 .build();

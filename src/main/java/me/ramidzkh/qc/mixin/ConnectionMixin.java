@@ -1,15 +1,22 @@
 package me.ramidzkh.qc.mixin;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
+import io.netty.channel.*;
 import io.netty.incubator.codec.quic.QuicStreamAddress;
 import io.netty.incubator.codec.quic.QuicStreamChannel;
 import me.ramidzkh.qc.client.QuicConnection;
 import me.ramidzkh.qc.client.QuicSocketAddress;
 import me.ramidzkh.qc.client.ServerAddressProperties;
-import net.minecraft.network.Connection;
+import me.ramidzkh.qc.shared.ConnectionSpoofer;
+import me.ramidzkh.qc.shared.DatagramConnectionWrapper;
+import net.minecraft.network.*;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.server.network.EventLoopGroupHolder;
+import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
+import org.slf4j.Logger;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -22,8 +29,9 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.concurrent.ExecutionException;
 
+@ChannelHandler.Sharable
 @Mixin(Connection.class)
-public class ConnectionMixin {
+public abstract class ConnectionMixin implements ConnectionSpoofer {
 
     @Shadow
     private Channel channel;
@@ -33,6 +41,29 @@ public class ConnectionMixin {
 
     @Shadow
     private boolean encrypted;
+
+    @Shadow
+    @Final
+    private static Logger LOGGER;
+
+    @Shadow
+    private static void syncAfterConfigurationChange(ChannelFuture channelFuture) {}
+
+    @Shadow
+    public abstract PacketFlow getReceiving();
+
+    @Shadow
+    protected abstract void channelRead0(ChannelHandlerContext par1, Object par2) throws Exception;
+
+    @Override
+    public void quic_connect$sendDatagramPacket(Packet<?> packet) {
+        this.channel.parent().writeAndFlush(packet, this.channel.parent().voidPromise());
+    }
+
+    @Override
+    public void quic_connect$readPacket(ChannelHandlerContext ctx, Packet<?> packet) throws Exception {
+        this.channelRead0(ctx, packet);
+    }
 
     @Inject(method = "connect", at = @At("HEAD"), cancellable = true)
     private static void onConnect(InetSocketAddress address, EventLoopGroupHolder groupHolder, Connection connection,
@@ -66,5 +97,70 @@ public class ConnectionMixin {
         if (encrypted) {
             callbackInfo.cancel();
         }
+    }
+
+    @Inject(method = "sendPacket", at = @At("HEAD"))
+    private void onSendPacket(Packet<?> packet, @Nullable ChannelFutureListener channelFutureListener, boolean bl, CallbackInfo ci) {
+        if (packet instanceof ServerboundInteractPacket pck) {
+            this.channel.parent().writeAndFlush(pck, this.channel.parent().voidPromise());
+        }
+    }
+
+    @Inject(method = "setupCompression", at = @At("HEAD"))
+    private void onSetupCompression(int threshold, boolean validate, CallbackInfo ci) {
+        Channel parent = this.channel.parent();
+        if (threshold >= 0) {
+            if (parent.pipeline().get("decompress") instanceof CompressionDecoder compressionDecoder) {
+                compressionDecoder.setThreshold(threshold, validate);
+            } else {
+                parent.pipeline().addAfter("splitter", "decompress", new CompressionDecoder(threshold, validate));
+            }
+
+            if (parent.pipeline().get("compress") instanceof CompressionEncoder compressionEncoder) {
+                compressionEncoder.setThreshold(threshold);
+            } else {
+                parent.pipeline().addAfter("prepender", "compress", new CompressionEncoder(threshold));
+            }
+        } else {
+            if (parent.pipeline().get("decompress") instanceof CompressionDecoder) {
+                parent.pipeline().remove("decompress");
+            }
+
+            if (parent.pipeline().get("compress") instanceof CompressionEncoder) {
+                parent.pipeline().remove("compress");
+            }
+        }
+    }
+
+    @Inject(method = "setupInboundProtocol", at = @At(value = "HEAD")/*@At(value = "INVOKE", target = "Lio/netty/channel/Channel;writeAndFlush(Ljava/lang/Object;)Lio/netty/channel/ChannelFuture;")*/)
+    private <T extends PacketListener> void onSetupInboundProtocol(ProtocolInfo<T> protocolInfo, T packetListener, CallbackInfo callbackInfo) {
+        if (protocolInfo.id() != ConnectionProtocol.PLAY)
+            return;
+
+        PacketDecoder<T> decoder = new PacketDecoder<>(protocolInfo);
+        if (this.getReceiving() == PacketFlow.CLIENTBOUND) {
+            this.channel.parent().pipeline().replace("inbound_config", "decoder", decoder);
+            this.channel.parent().pipeline().addLast("packet_handler", new DatagramConnectionWrapper((Connection) (Object) this));
+        } else {
+            this.channel.parent().pipeline().replace("decoder", "decoder", decoder);
+        }
+    }
+
+    @Inject(method = "setupOutboundProtocol", at = @At(value = "HEAD") /*@At(value = "INVOKE", target = "Lio/netty/channel/Channel;writeAndFlush(Ljava/lang/Object;)Lio/netty/channel/ChannelFuture;")*/)
+    private <T extends PacketListener> void onSetupOutboundProtocol(ProtocolInfo<?> protocolInfo, CallbackInfo callbackInfo) {
+        if (protocolInfo.id() != ConnectionProtocol.PLAY)
+            return;
+
+        PacketEncoder<?> encoder = new PacketEncoder<>(protocolInfo);
+        if (this.getReceiving() == PacketFlow.CLIENTBOUND) {
+            this.channel.parent().pipeline().replace("encoder", "encoder", encoder);
+        } else {
+            this.channel.parent().pipeline().replace("outbound_config", "encoder", encoder);
+            this.channel.parent().pipeline().addLast("packet_handler", new DatagramConnectionWrapper((Connection) (Object) this));
+        }
+
+        LOGGER.info("{} INTO PROTOCOL {}", this.getReceiving(), protocolInfo.id());
+        LOGGER.info("REWRITING OUTBOUND MAIN {}", this.channel.pipeline().names().toString());
+        LOGGER.info("REWRITING OUTBOUND PARENT {}", this.channel.parent().pipeline().names().toString());
     }
 }

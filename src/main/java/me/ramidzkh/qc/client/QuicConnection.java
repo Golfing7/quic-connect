@@ -1,5 +1,6 @@
 package me.ramidzkh.qc.client;
 
+import com.mojang.logging.LogUtils;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
@@ -15,6 +16,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.network.EventLoopGroupHolder;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
@@ -22,6 +24,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public class QuicConnection {
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     public static ChannelFuture connect(InetSocketAddress address, EventLoopGroupHolder groupHolder, Connection connection)
             throws ExecutionException, InterruptedException {
@@ -43,6 +46,7 @@ public class QuicConnection {
                 .initialMaxData(10000000)
                 // As we don't want to support remote initiated streams just setup the limit for local initiated streams
                 .initialMaxStreamDataBidirectionalLocal(1000000)
+                .datagram(256, 256)
                 .build();
 
         var channel = new Bootstrap()
@@ -63,7 +67,13 @@ public class QuicConnection {
                     protected void initChannel(@NotNull Channel channel) {
                         ((ConnectionAccessor) connection).setEncrypted(true);
                         var pipeline = channel.pipeline();
+                        var parentPipeline = channel.parent().pipeline();
                         Connection.configureSerialization(pipeline, PacketFlow.CLIENTBOUND, false, null);
+                        Connection.configureSerialization(parentPipeline, PacketFlow.CLIENTBOUND, false, null);
+
+                        LOGGER.info("CLIENT MAIN {}", channel.pipeline().names());
+                        LOGGER.info("CLIENT PARENT {}", channel.parent().pipeline().names());
+
                         pipeline.addLast("packet_handler", connection);
                     }
                 })
