@@ -31,7 +31,7 @@ public class DatagramConnectionWrapper extends SimpleChannelInboundHandler<Packe
         if (ThreadLocalRandom.current().nextDouble() > DROP_RATE) {
             accessor.quic_connect$readPacket(ctx, msg);
         } else {
-            LOGGER.debug("DROPPING PACKET {}", msg.getClass().getSimpleName());
+            LOGGER.info("DROPPING PACKET {}", msg.getClass().getSimpleName());
         }
     }
 }

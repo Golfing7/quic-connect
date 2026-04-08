@@ -10,12 +10,14 @@
         "server.DedicatedServerMixin",
         "server.DedicatedServerPropertiesMixin",
         "server.ServerConnectionListenerAccessor",
+        "server.ServerConnectionMixin",
         "server.ServerLoginPacketListenerImplMixin"
     ],
     "client": [
         "client.ServerAddressMixin",
         "client.ServerAddressResolverMixin",
-        "client.ServerNameResolverMixin"
+        "client.ServerNameResolverMixin",
+        "client.ClientConnectionMixin"
     ],
     "injectors": {
         "defaultRequire": 1
