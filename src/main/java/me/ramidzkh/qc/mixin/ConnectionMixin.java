@@ -8,14 +8,11 @@ import me.ramidzkh.qc.client.QuicSocketAddress;
 import me.ramidzkh.qc.client.ServerAddressProperties;
 import me.ramidzkh.qc.shared.ConnectionSpoofer;
 import me.ramidzkh.qc.shared.DatagramConnectionWrapper;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.*;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.server.network.EventLoopGroupHolder;
-import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -47,12 +44,6 @@ public abstract class ConnectionMixin implements ConnectionSpoofer {
 
     @Shadow
     protected abstract void channelRead0(ChannelHandlerContext par1, Object par2) throws Exception;
-
-    @Shadow
-    public abstract PacketFlow getSending();
-
-    @Shadow
-    private volatile @Nullable PacketListener packetListener;
 
     @Override
     public void quic_connect$sendDatagramPacket(Packet<?> packet) {
