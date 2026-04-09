@@ -40,6 +40,11 @@ public abstract class ClientConnectionMixin implements ConnectionSpoofer {
         registerServerboundPacket(ServerboundPlayerInputPacket.class, Predicates.alwaysTrue());
         // A player swinging their arm (uselessly) does not need to be reliable.
         registerServerboundPacket(ServerboundSwingPacket.class, Predicates.alwaysTrue());
+        // Command suggestion request packets are unimportant.
+        registerServerboundPacket(ServerboundCommandSuggestionPacket.class, Predicates.alwaysTrue());
+        // Pick block and entity packets can be re-sent by the player without too much fuss.
+        registerServerboundPacket(ServerboundPickItemFromBlockPacket.class, Predicates.alwaysTrue());
+        registerServerboundPacket(ServerboundPickItemFromEntityPacket.class, Predicates.alwaysTrue());
     }
 
     @Inject(method = "sendPacket", at = @At("HEAD"), cancellable = true)
